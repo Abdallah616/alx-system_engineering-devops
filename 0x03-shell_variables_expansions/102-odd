@@ -1,0 +1,2 @@
+#!/bin/bash
+ls -l | pastr -d, - - | cut -d, -f1
