@@ -1,67 +1,24 @@
-#!/usr/bin/env bash
-# Installs HAProxy with the following configurations:
-# - Enables management via the init script.
-# - Distributes requests using a round-robin algorithm
-
-# Check for root privileges
-if [ "$(id -u)" -ne 0 ]; then
-    echo "This script must be run as root. Please use sudo or run as root."
-    exit 1
-fi
+#!/bin/bash
 
 # Install HAProxy
-sudo apt-get install -y haproxy
-
-# Backup existing configuration
-cp /etc/haproxy/haproxy.cfg{,.backup}
-
-# Enable management via init script
-echo "ENABLED-1" >> /etc/default/haproxy
-
-# Create a new HAProxy configuration file
-mv /etc/haproxy/haproxy.cfg{,.original}
-touch /etc/haproxy/haproxy.cfg
+sudo apt update
+sudo apt install -y haproxy
 
 # Configure HAProxy
-printf %s "global
-        log 127.0.0.1 local2 notice
-        maxconn 2000
-        user haproxy
-        group haproxy
+sudo tee /etc/haproxy/haproxy.cfg > /dev/null <<EOT
+frontend http_front
+    bind *:80
+    stats uri /haproxy?stats
+    default_backend http_back
 
-defaults
-        log     global
-        mode    http
-        option  httplog
-        option  dontlognull
-        retries 3
-        option  redispatch
-        timeout connect 5000
-        timeout client 30000
-        timeout server 30000
-        errorfile 400 /etc/haproxy/errors/400.http
-        errorfile 403 /etc/haproxy/errors/403.http
-        errorfile 408 /etc/haproxy/errors/408.http
-        errorfile 500 /etc/haproxy/errors/500.http
-        errorfile 502 /etc/haproxy/errors/502.http
-        errorfile 503 /etc/haproxy/errors/503.http
-        errorfile 504 /etc/haproxy/errors/504.http
+backend http_back
+    balance roundrobin
+    server 497067-web-01 3.85.16.206:80 check
+    server 497067-web-02 100.25.222.19:80 check
+EOT
 
-frontend http-in
-        timeout client  30000
-        bind 0:80
-        default_backend servers
+# Ensure HAProxy can be managed via init script
+sudo systemctl enable haproxy
 
-backend servers
-        timeout connect 3000
-        timeout server 30000
-        balance roundrobin
-        server 497067-web-01 3.85.16.206:80 check
-        server 497067-web-02 100.25.222.19:80 check
-" >> /etc/haproxy/haproxy.cfg
-
-# Restart HAProxy service
-systemctl restart haproxy
-
-# Enable HAProxy to start on boot
-systemctl enable haproxy
+# Restart HAProxy for changes to take effect
+sudo systemctl restart haproxy
